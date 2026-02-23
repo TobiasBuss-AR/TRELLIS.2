@@ -126,12 +126,31 @@ logger.info(f"Total runtime: {total:.1f}s")
 # --- Copy results back to S3 mount ---
 if use_s3:
     logger.info(f"Copying results back to S3 mount: {s3_result_dir}")
-    os.makedirs(s3_result_dir, exist_ok=True)
+
+    def retry(fn, description, retries=5, delay=5):
+        """Call fn(), retry on exception with increasing wait."""
+        for attempt in range(1, retries + 1):
+            try:
+                fn()
+                return
+            except Exception as e:
+                if attempt == retries:
+                    logger.error(f"FAILED after {retries} attempts — {description}: {e}")
+                    raise
+                wait = delay * attempt
+                logger.warning(f"Attempt {attempt}/{retries} failed ({description}): {e} — retrying in {wait}s...")
+                time.sleep(wait)
+
+    retry(lambda: os.makedirs(s3_result_dir, exist_ok=True),
+          f"makedirs {s3_result_dir}")
+
     for fname in os.listdir(result_dir):
         src = os.path.join(result_dir, fname)
         dst = os.path.join(s3_result_dir, fname)
         logger.info(f"  uploading {fname}...")
-        shutil.copy2(src, dst)
+        retry(lambda s=src, d=dst: shutil.copy2(s, d),
+              f"copy {fname}")
+
     logger.info(f"All results copied to: {s3_result_dir}")
 
 logger.info("Done.")
