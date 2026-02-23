@@ -57,7 +57,7 @@ if use_s3:
     local_input = os.path.join(WORKDIR, os.path.basename(given_path))
     logger.info(f"S3 input detected — copying to workdir...")
     logger.info(f"  {given_path}  →  {local_input}")
-    shutil.copy2(given_path, local_input)
+    shutil.copyfile(given_path, local_input)
     input_path = local_input
     # mirror path: result will be copied back here when done
     s3_result_dir = os.path.join(os.path.dirname(given_path), f"result_{timestamp}")
@@ -74,7 +74,7 @@ logger.info(f"Log file     : {log_path}")
 
 # Copy input image into result folder with "input_" prefix
 input_copy = os.path.join(result_dir, "input_" + os.path.basename(input_path))
-shutil.copy2(input_path, input_copy)
+shutil.copyfile(input_path, input_copy)
 logger.info(f"Input copy   : {input_copy}")
 
 # 1. Setup Environment Map
@@ -153,7 +153,7 @@ if use_s3:
         src = os.path.join(result_dir, fname)
         dst = os.path.join(s3_result_dir, fname)
         logger.info(f"  uploading {fname}...")
-        retry(lambda s=src, d=dst: shutil.copy2(s, d),
+        retry(lambda s=src, d=dst: shutil.copyfile(s, d),
               f"copy {fname}")
 
     logger.info(f"All results copied to: {s3_result_dir}")
