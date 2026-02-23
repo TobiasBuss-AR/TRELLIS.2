@@ -72,6 +72,11 @@ logger.info(f"Input image  : {input_path}")
 logger.info(f"Result folder: {result_dir}")
 logger.info(f"Log file     : {log_path}")
 
+# Copy input image into result folder with "input_" prefix
+input_copy = os.path.join(result_dir, "input_" + os.path.basename(input_path))
+shutil.copy2(input_path, input_copy)
+logger.info(f"Input copy   : {input_copy}")
+
 # 1. Setup Environment Map
 logger.info("Loading environment map...")
 envmap = EnvMap(torch.tensor(
