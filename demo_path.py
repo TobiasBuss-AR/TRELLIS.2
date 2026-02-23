@@ -4,6 +4,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # Can save G
 import argparse
 import datetime
 import logging
+import shutil
 import sys
 import time
 import cv2
@@ -15,19 +16,21 @@ from trellis2.utils import render_utils
 from trellis2.renderers import EnvMap
 import o_voxel
 
+# --- Constants ---
+WORKDIR    = "/data/workdir"
+S3_PREFIX  = "/s3"          # local mount point of the S3 bucket
+
 # --- Argument parsing ---
 parser = argparse.ArgumentParser(description="TRELLIS.2 image-to-3D demo")
-parser.add_argument("image_path", help="Path to the input image (e.g. assets/example_image/T.png)")
+parser.add_argument("image_path", help="Path to input image — local or under /s3/...")
 args = parser.parse_args()
 
-input_path = os.path.abspath(args.image_path)
-if not os.path.isfile(input_path):
-    print(f"Error: input image not found: {input_path}", file=sys.stderr)
-    sys.exit(1)
+given_path  = os.path.abspath(args.image_path)
+use_s3      = given_path.startswith(S3_PREFIX + os.sep) or given_path == S3_PREFIX
+timestamp   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# --- Create timestamped result folder ---
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-result_dir = os.path.join(os.path.dirname(input_path), f"result_{timestamp}")
+# Working result dir is always on fast local storage
+result_dir  = os.path.join(WORKDIR, f"result_{timestamp}")
 os.makedirs(result_dir, exist_ok=True)
 
 # --- Logger setup (console + file, written live) ---
@@ -45,6 +48,25 @@ _ch.setFormatter(fmt)
 logger.addHandler(_ch)
 
 run_start = time.time()
+
+# --- Copy input from S3 mount to workdir if needed ---
+if use_s3:
+    if not os.path.isfile(given_path):
+        logger.error(f"Input image not found on S3 mount: {given_path}")
+        sys.exit(1)
+    local_input = os.path.join(WORKDIR, os.path.basename(given_path))
+    logger.info(f"S3 input detected — copying to workdir...")
+    logger.info(f"  {given_path}  →  {local_input}")
+    shutil.copy2(given_path, local_input)
+    input_path = local_input
+    # mirror path: result will be copied back here when done
+    s3_result_dir = os.path.join(os.path.dirname(given_path), f"result_{timestamp}")
+else:
+    if not os.path.isfile(given_path):
+        logger.error(f"Input image not found: {given_path}")
+        sys.exit(1)
+    input_path    = given_path
+    s3_result_dir = None
 
 logger.info(f"Input image  : {input_path}")
 logger.info(f"Result folder: {result_dir}")
@@ -100,4 +122,16 @@ logger.info(f"GLB saved   : {glb_path}")
 
 total = time.time() - run_start
 logger.info(f"Total runtime: {total:.1f}s")
+
+# --- Copy results back to S3 mount ---
+if use_s3:
+    logger.info(f"Copying results back to S3 mount: {s3_result_dir}")
+    os.makedirs(s3_result_dir, exist_ok=True)
+    for fname in os.listdir(result_dir):
+        src = os.path.join(result_dir, fname)
+        dst = os.path.join(s3_result_dir, fname)
+        logger.info(f"  uploading {fname}...")
+        shutil.copy2(src, dst)
+    logger.info(f"All results copied to: {s3_result_dir}")
+
 logger.info("Done.")
