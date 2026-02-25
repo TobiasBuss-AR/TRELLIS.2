@@ -100,7 +100,8 @@ logger.info(f"Pipeline finished in {time.time() - t0:.1f}s")
 # 4. Render Video
 logger.info("Rendering video...")
 video = render_utils.make_pbr_vis_frames(render_utils.render_video(mesh, envmap=envmap))
-mp4_path = os.path.join(result_dir, "sample.mp4")
+input_basename = os.path.basename(input_path)
+mp4_path = os.path.join(result_dir, f"video_{input_basename[:-4]}.mp4")
 imageio.mimsave(mp4_path, video, fps=15)
 logger.info(f"Video saved : {mp4_path}")
 
@@ -121,7 +122,7 @@ glb = o_voxel.postprocess.to_glb(
     remesh_project      =   0,
     verbose             =   True
 )
-glb_path = os.path.join(result_dir, "sample.glb")
+glb_path = os.path.join(result_dir, f"glb_{input_basename[:-4]}.glb")
 glb.export(glb_path, extension_webp=True)
 logger.info(f"GLB saved   : {glb_path}")
 
